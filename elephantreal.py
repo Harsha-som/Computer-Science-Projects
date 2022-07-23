@@ -3,7 +3,7 @@
 CS152
 lab5
 simulate elephnat population to make sure is wihtin carrying capacity
-change directory to project 5 and run py elephant.py to call
+change directory to project 6 and run py elephant.py to call
 '''
 import stats
 import random
