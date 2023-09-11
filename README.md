@@ -1,3 +1,3 @@
 # Computer-Science-Projects
 A compilation of past computer science projects at Colby College.
-Please connect through github for any inquiries. 
+Please connect through GitHub for any inquiries. 
