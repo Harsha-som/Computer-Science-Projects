@@ -1,0 +1,67 @@
+---
+title: "HW 22" 
+author: "Harsha"
+date: "2024-04-11"
+output: 
+   html_document:
+     code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, results = "hide")
+
+```
+
+Here, we are examining the relationship between petal.area and petal.length from the iris_measurements.csv file on iris flowers. We are fitting a first order linear model of 
+
+$petal.area= m*petal.length+b+ϵ$, 
+where ϵ is a constant that does not vary as a function of varying petal.length. We will first graph these two continuous variables in the scatterplot below. 
+
+### Import libraries
+```{r}
+library(ggplot2)
+library(tidyr)
+```
+
+### Scatterplot 
+```{r fig.width=5, fig.height=4}
+df <- read.csv("iris_measurements.csv") %>% 
+  pivot_wider(names_from = type, 
+            values_from = value)
+
+# Plot the data
+ggplot(df, aes(x=petal.length, y=petal.area)) + geom_point() + 
+  xlab("Petal Length") + ylab("Petal Aea") + ggtitle("Petal Area vs. Length ")
+
+
+```
+
+From first look, it seems like a linear model is indeed a good fit. But we have to make sure the conditions are satisfied first before we attempt to fit a linear model. These assumptions include linearity, equal variance in the residuals, independence. Let's start with independence first. Just because a certain flower has a petal.area and petal.length, in theory this should not influence these measurements in a nearby flower. We may assume the datapoints for each flower are independent of one another. For linearity, the scatterplot above seems to suggest that a linear model would be a good fit. Most of the points fall on a positive slope line. We can vertify this condition and equal variance with the residual-dependence diagnostic plot below. 
+
+### Residual-Dependence diagnostic plot
+```{r fig.width=5, fig.height=4}
+#Fit the model
+M1 <- lm(petal.area ~ petal.length, data= df)
+coefficients(M1)
+df$resid1 <- residuals(M1)
+
+#residual-dependence diagnostic plot
+ggplot(df, aes(x = petal.length, y = resid1)) + geom_point() +
+            stat_smooth(method = "loess", se = FALSE, span = 1, 
+            method.args = list(degree = 1) ) +
+  xlab("Petal Length") + ylab("Residual") + 
+  ggtitle("Residual vs. Petal Length ")
+```              
+
+Since the points are about uniformly distributed across the plot and the loess fit is about a horizontal line, the linear model is a good fit. The residuals are not dependent on the Petal Length, which indicates a constant ϵ. They are randomly scattereted. We can vertify if this also holds when the residuals are plotted against the predicted y values of Petal area below. 
+
+### Spread-location diagnostic plot;
+```{r fig.width=5, fig.height=4}
+sl <- data.frame(std.res = sqrt(abs(df$resid1)), fit = predict(M1))
+ggplot(sl, aes (fit, std.res)) + geom_point() + 
+  stat_smooth(method = "loess", se = FALSE, span = 2, 
+              method.args = list(degree = 1)) + xlab("Fitted Petal Area") +
+  ggtitle("Standardized residuals vs. Predicted Petal Area ")
+```
+
+Here, the residuals be increasing, meaning as predicted petal area increases, so does the standardized residuals This does not imply constant residuals or epislon. There is a montonic increase. Hence, we should not fit a linear model. 
