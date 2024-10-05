@@ -1,0 +1,131 @@
+---
+title: "HW 22" 
+author: "Harsha"
+date: "2024-04-03"
+output: 
+   html_document:
+     code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+#### Spread in mean values is about half that of the residuals’
+```{r fig.width=4, fig.height=4}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+set.seed(10) #set seed to get same random values every run
+
+n <- 200  # Number of simulated values in each batch
+a <- rnorm(n, 14, 2) #create random normal batch
+b <- rnorm(n, 10.9, 2)
+df5 <- data.frame( x = c(a, b),
+                  group = c(rep("a", n), rep("b", n)))
+
+lf <- df5 %>%   # Normalize values to global mean
+  mutate(norm = x - mean(x)) %>%   # Normalize values to global mean
+  group_by(group) %>% 
+  mutate( Residuals  = norm - mean(norm),    # Extract group residuals
+          `Fitted values` = mean(norm)) %>%   # Extract group means
+  ungroup() %>% 
+  select(Residuals, 'Fitted values') %>% 
+  pivot_longer( names_to = "type", values_to = "Values",
+                cols = everything()) %>% 
+  group_by(type) %>% 
+  arrange(Values) %>% 
+  mutate( fval= (row_number()-0.5)/ n()) #calculate f val
+
+#plot of separate graphs
+# ggplot(rf, aes(x = fval, y = Values)) + 
+#     geom_point(alpha = 0.3, cex = 1.5) +
+#     xlab("f-value") + ylab("Values") +
+#     facet_wrap(~type)
+
+#Overlayed R-F spread plot
+ggplot(rf, aes(x = fval, y = Values, col = type)) + 
+    geom_point(alpha = 0.3, cex = 1.5) +
+    xlab("f-value") + ylab("Values") + ggtitle("R-F spread plot")
+```
+
+It’s clear from this r-f spread plot that the spread of the mean values (between batches a and b) is about half of that of its residuals. The means span 2.52 units (about -1.26 to +1.26 on the y-axis) while the residuals span about 5 units, from  about -2.5 to 2.5 (ignoring extremes). This suggests that the groups a and b do not explain much of the variability in the data. We can vertify this by eyeing where the spread of the fitted values coincides with the spread in residuals. We can see the f-values goes from about .25 to about .74 or 25% to 74%. So the difference in means explains about 49% (74%-54%)  of the variability in the data. 
+
+
+
+#### Spread in mean values about that of the residuals 
+
+```{r fig.width=4, fig.height=4}
+a1 <- rnorm(n, 17, 2)
+b1 <- rnorm(n, 10, 2)
+df <- data.frame( x = c(a1, b1),
+                  group = c(rep("a", n), rep("b", n)))
+
+#Residual-fit spread df 
+rf <- df %>%   # Normalize values to global mean
+  mutate(norm = x - mean(x)) %>%   # Normalize values to global mean
+  group_by(group) %>% 
+  mutate( Residuals  = norm - mean(norm),    # Extract group residuals
+          `Fitted values` = mean(norm)) %>%   # Extract group means
+  ungroup() %>% 
+  select(Residuals, 'Fitted values') %>% 
+  pivot_longer( names_to = "type", values_to = "Values",
+                cols = everything()) %>% 
+  group_by(type) %>% 
+  arrange(Values) %>% 
+  mutate( fval= (row_number()-0.5)/ n()) #create f val
+
+#Plot of spearate fitted and resiudals
+# ggplot(rf, aes(x = fval, y = Values)) + 
+#     geom_point(alpha = 0.3, cex = 1.5) +
+#     xlab("f-value") + ylab("Values") +
+#     facet_wrap(~type)
+
+#Overlayed R-F spread plot
+ggplot(rf, aes(x = fval, y = Values, col = type)) + 
+    geom_point(alpha = 0.3, cex = 1.5) +
+    xlab("f-value") + ylab("Values") + ggtitle("R-F spread plot")
+```
+
+
+It’s clear from this r-f spread plot that the spread of the mean values (between batches a and b) is about the same compared to that of its residuals. The means span 7.5 units (about -3.75 to +3.75 on the y-axis) while the residuals span about the same amount (ignoring extremes). This suggests that the groups a and b explain much of the variability in the data. We can vertify this by eyeing where the spread of the fitted values coincides with the spread in residuals. We can see the f-values goes from almost 0 to 1 or 0% to 100%. Hence, the spread in mean values is about that of the residuals. So the difference in means explains about 100% (100%-0%) of the variability in the data. Of course, in reality it is slightly less than 100% but still close to it.  
+
+
+
+#### Example given on HW
+```{r fig.width=4, fig.height=4}
+set.seed(NULL) #remove seed
+n <- 200  
+a2 <- rnorm(n, 10, 2)
+b2 <- rnorm(n, 11, 2)
+df <- data.frame( x = c(a2, b2),
+                  group = c(rep("a", n), rep("b", n)))
+
+#Residual-fit spread df 
+rf <- df %>%   # Normalize values to global mean
+  mutate(norm = x - mean(x)) %>%   # Normalize values to global mean
+  group_by(group) %>% 
+  mutate( Residuals  = norm - mean(norm),    # Extract group residuals
+          `Fitted values` = mean(norm)) %>%   # Extract group means
+  ungroup() %>% 
+  select(Residuals, 'Fitted values') %>% 
+  pivot_longer( names_to = "type", values_to = "Values",
+                cols = everything()) %>% 
+  group_by(type) %>% 
+  arrange(Values) %>% 
+  mutate( fval= (row_number()-0.5)/ n())
+
+#Separates r-f spread plot
+# ggplot(rf, aes(x = fval, y = Values)) + 
+#     geom_point(alpha = 0.3, cex = 1.5) +
+#     xlab("f-value") + ylab("Values") +
+#     facet_wrap(~type)
+
+#Overlayed r-f plot
+ggplot(rf, aes(x = fval, y = Values, col = type)) + 
+    geom_point(alpha = 0.3, cex = 1.5) +
+    xlab("f-value") + ylab("Values") + ggtitle("R-F spread plot")
+```
+
+The r-f plot suggests that the fitted mean values cover a span of about 1 unit (expected since the simulated values have means that differ by one unit). This span of 1 unit is small compared to the span covered by the residuals of about 10 units (about -5 to + 5 along the y-axis–ignoring the extreme ends). This suggests that the groups a and b do not explain much of the variability in the data. Specifically, from eyeing where the spread of the fitted values coincides with the spread in residuals, we can see the f-values goes from about .37 to about .63 or 37% to 63%. So the difference in means explains about 26% (63%-37%)  of the variability in the data.

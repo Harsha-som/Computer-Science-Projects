@@ -1,0 +1,73 @@
+---
+title: "Group assisgnment 8" 
+author: "Harsha"
+date: "2024-04-05"
+output: 
+   html_document:
+     code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+```{r fig.width=4, fig.height=4}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+df <- read.csv ("evergladesP.csv") #load data
+
+df1 <- df %>% 
+  pivot_longer( cols= 2:13, names_to = "Month", values_to = "Phosphorus_concentrations") %>% 
+  filter(Month %in% c("JUL", "AUG", "SEP", "OCT")) #select months and pivot longer
+ 
+
+rf <- df1 %>%   # Normalize values to global mean
+  mutate(norm = Phosphorus_concentrations - mean(Phosphorus_concentrations, 
+                                                na.rm = TRUE))%>% 
+  group_by(Month) %>% 
+  mutate( Residuals  = norm - mean(norm, na.rm = TRUE), # Extract group residuals
+          `Fitted values` = mean(norm, na.rm = TRUE)) %>% # Extract group means
+  ungroup() %>% 
+  select(Residuals, 'Fitted values') %>% 
+  pivot_longer( names_to = "type", values_to = "Values",
+                cols = everything()) %>% 
+  group_by(type) %>% 
+  arrange(Values) %>% 
+  mutate( fval= (row_number()-0.5)/ n()) #calculate f val
+
+#Overlayed R-F spread plot
+ggplot(rf, aes(x = fval, y = Values, col = type)) + 
+  geom_point(alpha = 0.3, cex = 1.5) +
+  xlab("f-value") + ylab("Values") + ggtitle("R-F spread plot")
+```
+
+Above is a R-f spread plot for monthly average phosphorus concentrations in ppb for the months of July, August, September and October from 1927 to 2012 in the Florida Everglades. Each of the red fitted chunks represent the average ppb in that given month, while the blue dots is the overall residuals (how far the normalized concentration for a given month and year is from the average normalized ppm in that month). Normalized concentration is found by taking each data point's concentration and subtracting the overall average concentration across all months from it.  
+We can see that the means or red fitted values spans about 5.4 units (about -3 to +2.4 on the y-axis) while the residuals span about 11.25 units, from  about -5 to 6.25 (ignoring extremes). This suggests that the monthly mean concentrations explain a little less than half of the variability in the data. We can vertify this by eyeing where the spread of the fitted values coincides with the spread in residuals. We can see the f-values goes from about .17 to about .62 or 17% to 62%. So the difference in monthly average phosporhous concentration explains about 45% (62%-17%)  of the variability in the data. The spread in the concentration averages for each month encompasses about 45% of the spread in the residuals.
+
+It is assumed that the variance of the residuals is constant for each month. We can vertify this with the plot below. 
+```{r fig.width = 5, fig.height = 4}
+df3 <- df1 %>%
+  group_by(Month)  %>%
+  mutate(Phos.res = Phosphorus_concentrations - mean(Phosphorus_concentrations, 
+                                                     na.rm= TRUE)) %>% 
+  #get resiudals by month
+  arrange(Phos.res)  %>% 
+  mutate(f.val    = (row_number() - 0.5) / n())  %>% #create percentiles 
+  ungroup()  %>% #ungroup to get pooled residuals for all of data
+  mutate(Pooled.res = quantile(Phos.res, probs = f.val, na.rm = TRUE))  %>%
+  select(Month, Phos.res, Pooled.res)
+
+#Graph resiudals for each month
+ggplot(df3, aes(y = Phos.res, x = Pooled.res)) + geom_point(alpha = 0.5) + 
+              geom_abline(intercept = 0, slope = 1) + 
+  ylab("Phosphorus residuals")+ xlab("Pooled resiudals")+
+              facet_wrap(~ Month, nrow = 1) 
+```
+
+Each of the months seem to have similar spreads. There are many deviations near +5 and -5  standard deviations, but the core of the data (within -1 to 1 standard deviations) seem to fit the line consistently well. The only exception is the September graph which has many points deviating from the line after about 1 standard deviation. Perhaps the month of September is not represented by a linear model for the concentration. Since for the most part the spreads are similar, we can assess the influence the monthly means have in explaining the concentration spreads since we can now treat the residuals, epsilon, in our linear equation of $Concentration = μ_m~ + epsilon$ (m is given month) as constant. 
+
+
+If the residuals varied across each month concentration, we could not explain how much of the variability can be explained by the monthly fitted mean concentrations. Now we know that we can attribute some of the variability to the difference in average concentrations for each month. 

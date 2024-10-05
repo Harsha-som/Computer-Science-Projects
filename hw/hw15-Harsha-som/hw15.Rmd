@@ -1,0 +1,35 @@
+---
+title: "HW 15" 
+author: "Harsha Somaya"
+date: "2024-03-12"
+output: 
+   html_document:
+     code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message= FALSE)
+```
+
+### Temperature vs. Month at Alaska Allen Army Airfield
+
+```{r fig.height=3, fig.width=4 }
+#load necessary libraries 
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+
+allen_army_1945_2019 <- readRDS("allen_army_1945_2019.rds")
+
+# Create month variables
+part1 <- allen_army_1945_2019 %>% 
+  mutate( month = month(time, label = TRUE)) 
+
+#Create boxplots of temperature by month
+ggplot(part1, aes(x = month, y = temp)) + geom_boxplot(fill = "bisque")+
+  xlab("Month of Year") + ylab("Temperature (Celsius)")
+
+```
+
+Above is a collection of boxplots of temperatures by month for the Allen Army Airfield meteorological dataset in Alaska. It covers 
+`r range(year(part1$time))[2]-range(year(part1$time))[1]` years from `r  range(year(part1$time))[1]` to `r  range(year(part1$time))[2]`.
