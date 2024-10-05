@@ -1,0 +1,75 @@
+---
+title: "HW 22" 
+author: "Harsha"
+date: "2024-04-11"
+output: 
+   html_document:
+     code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+
+We explore the variability of income levels in the 2008-2012 US workforce. The data are aggregated at the county level. We want to know how much the education level contributes to the variability in income or if income is noticeably different across the education income levels. 
+
+We define our linear model as:
+
+$Income=μ education+ϵ$
+
+If we compare the spreads in the income by month to the residual, ϵ, we need to make sure that the spreads or ϵ remain constant across all education levels. A plot that will help compare the residuals is the pooled residual q-q plot below. 
+
+
+```{r fig.width=5, fig.height=4}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+dat <- read.csv("education.csv") #load data
+
+# pooled residual qq plot ----
+dat3 <- dat %>% 
+  group_by(Education) %>%  #resiudal differences for each education level 
+  arrange(Income)  %>% 
+  mutate(`Residuals` = Income - mean(Income),
+         f.val = (row_number() - 0.5) / n() ) %>%
+  ungroup() %>% 
+  mutate(`Pooled residuals` = quantile(`Residuals`, f.val)) 
+
+#Create qq plot 
+ggplot(dat3, aes(x = `Pooled residuals`, y = `Residuals`))  + geom_point() + 
+  scale_x_continuous(labels=scales::unit_format(suffix="k", #k to fitvalues 
+                                                scale=0.001, 
+                                                sep="")) +
+  scale_y_continuous(labels=scales::unit_format(suffix="k", 
+                                                scale=0.001, 
+                                                sep="")) +
+  geom_abline(intercept = 0, slope = 1) + facet_wrap(~ Education, nrow = 1)
+
+```
+
+The education levels of Bachelor's Degree (BD) and Graduate Or Professional Degree (Grad) appear to have similar spreads. The same is true for some college or associate's degree (AD) and high school (HS). However, between these two educational groups the spreads appear different. The BD and Grad graphs deviate some from that of AD and HS. This implies that there is no homogeneity in the residuals, or that the residuals are not constant across the education levels. The HS and AD pooled residual qq plots have many points deviating for the solid line, from being generally above the line to the left of the 0k mark to being below the line after 0k. Most points in the BD and Grad graphs are on/close the 1:1 line, excluding some outliers. Generally, it seems that with the more education one receives, the points end up being rotated counterclockwise about the 1:1 line. Hence, there is great deviation at the HS level from the solid line to little deviation at the BD level before it start deviating again in the Grad plot (almost like rotating the chunk of points counterclockwise). The points seem like they are rotating about the solid line with increasing education, which indicates that the spread is not constant. If it were, we would not be able to discern a change/pattern like this as education level increases. We can see if this is further the case with a spread level plot. 
+
+
+
+
+
+#### Spread-level plot of income across levels of educational attainment
+
+```{r}
+sl <- dat %>%
+  group_by(Education)%>%
+  mutate( median = median(Income), #get median for each educatin group
+          res = sqrt( abs( Income - median)))  %>%
+  ungroup()                                     
+
+#Create sl plot
+ggplot(sl, aes(x = median, y = res)) + 
+  geom_jitter(alpha = 1, width = 900, height = 0, cex = 1) + 
+  stat_summary(fun = median, geom = "line", col = "red") +
+  ylab(expression(sqrt( abs( " Residuals ")))) +
+  geom_text(aes(x = median, y = 420, label = Education))
+```
+
+Looking at the s-l plot, we can see that as the median of the Income increases, so does the spread as indicated by the positive slope of the red line. This confirms our implications for the pooled resiudal qq plot. As education increases, there is more spread in income levels. Hence, our ϵ does not remain constant across all education levels. Hence, we will not be able to determine if mean income is different across the four education levels.
