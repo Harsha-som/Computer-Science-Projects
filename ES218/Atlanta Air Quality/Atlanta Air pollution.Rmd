@@ -1,0 +1,113 @@
+---
+title: "Atlanta Air Pollution Visualization"
+author: "Harsha"
+date: "2024-12-11"
+output: 
+   html_document:
+     code_folding: hide
+     toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,  warning=FALSE, message=FALSE)
+```
+
+
+### Introduction
+Here, I will create graphs on Air Quality in Atlanta. These data is obtained from the EPA at https://www.epa.gov/outdoor-air-quality-data/air-data-multiyear-tile-plot. 
+
+
+### Load libraries 
+```{r cars}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(lubridate)
+```
+
+### Data mining 
+
+```{r}
+air.pollution <- read.csv("ATLPollution2.csv") #load  data
+air.pollution$Date <- mdy(air.pollution$Date) 
+                     
+
+air.pollution.filtered <- air.pollution %>% 
+   mutate(Site.Name = case_when(Site.Name == "Georgia Tech, Ford Environmental Science and Technology Bldg, roof" ~ "Georgia Tech, Midtown", Site.Name == "UNIVERSITY OF GA, EXPERIMENT STATION TISSUE LAB, GRIFFIN GA" ~ "UGA, Griffin", TRUE ~ Site.Name)) %>% 
+               filter (Site.Name != "Not Available") %>%  #remove null sites
+               group_by ( Site.Name,Main.Pollutant ) %>%
+               filter(n() > 1) %>% 
+               ungroup() #remove sites with just one data point 
+
+
+# Create dataframes 
+PM2.5 <- air.pollution.filtered %>% 
+      filter(Main.Pollutant == "PM2.5")
+
+PM10 <- air.pollution.filtered %>% 
+      filter(Main.Pollutant == "PM10") 
+
+PM10 <- air.pollution.filtered %>% 
+      filter(Main.Pollutant == "PM10") 
+
+
+Ozone.df <- air.pollution.filtered %>% 
+      filter(Main.Pollutant == "Ozone")
+
+NO2.df <- air.pollution.filtered %>% 
+      filter(Main.Pollutant == "NO2")
+      
+
+```
+
+
+## Create temporal graphs 
+```{r fig.width = 5.7, fig.height = 5.3}
+PM2.5.graph <- ggplot(PM2.5, aes(x = Date, y = X.AQI.Value)) + geom_line() + facet_wrap(  ~ Site.Name, labeller = label_wrap_gen(width = 12), nrow=3)+ ggtitle("Temporal PM2.5 AQI for Metro Atlanta Regions") + ylab("AQI")
+PM2.5.graph
+
+Ozonegraph <- ggplot(Ozone.df, aes(x = Date, y = X.AQI.Value)) + geom_line() + facet_wrap(  ~ Site.Name, labeller = label_wrap_gen(width = 15)) + ggtitle("Temporal Ozone AQI for Metro Atlanta Regions") + ylab("AQI")
+Ozonegraph
+
+NO2graph <- ggplot(NO2.df, aes(x = Date, y = X.AQI.Value)) + geom_line() + facet_wrap(  ~ Site.Name, labeller = label_wrap_gen(width = 15) ) + ggtitle("Temporal NO2 AQI for Metro Atlanta Regions") + ylab("AQI")
+NO2graph
+
+
+```
+
+```{r fig.width = 4.3, fig.height = 3}
+PM10graph <- ggplot(PM10, aes(x = Date, y = X.AQI.Value)) + geom_line() + facet_wrap(  ~ Site.Name  ) + ggtitle("Temporal PM10 AQI for Metro Atlanta Regions") + ylab("AQI")
+PM10graph
+```
+
+
+```{r fig.width = 7.3, fig.height = 7.3}
+overallgraph <- ggplot(air.pollution.filtered, aes(x = Date, y = X.AQI.Value, color = Main.Pollutant)) + geom_line() + facet_wrap(  ~ Site.Name, labeller = label_wrap_gen(width = 12) ) + ggtitle("Temporal AQI for Metro Atlanta Regions")  +  guides(color = guide_legend(title = "Main Pollutant")) + ylab("AQI")
+overallgraph
+
+
+ggsave("overall.png", plot = overallgraph, width = 20, height = 20) #save plots
+
+ggsave("PM2.5.png", plot = PM2.5.graph)
+
+ggsave("PM10.png", plot = PM10graph)
+
+ggsave("Ozone.png", plot = Ozonegraph)
+
+ggsave("NO2.png", plot = NO2graph)
+
+
+
+```
+
+You can read a report on air quality in Atlanta [here](https://docs.google.com/document/d/1DxvoYCU6mVU7Cfe3DnBgQ77YddAdYrdXnFtsqrOqBSs/edit?usp=sharing). 
+
+
+
+```{r}
+#ggplot(air.pollution.filtered, aes(x = Date, y = X.AQI.Value)) + geom_line() + facet_grid(  Main.Pollutant ~Site.Name , labeller = label_wrap_gen(width = 5), scales = "free", space = "free")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ ggtitle("Temporal Main pollutant Levels for Metro Atlanta Regions") + ylab("Main Pollutant Level")
+
+```
+
+
