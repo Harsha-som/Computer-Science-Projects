@@ -1,0 +1,261 @@
+---
+title: "SC324 Final Project"
+author: Harsha Somaya
+date: ""
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(output = FALSE, warning = FALSE, message=FALSE, fig.width = 4, fig.height = 4)
+```
+
+### Introduction
+
+The purpose of this study is to predict DRYBIO or the Biomass in the above ground portion of the trees in pounds for a given site. Each site or row in this dataset represents a 90x90 meter pixel of land chosen at random from various points in the western U.S. Each pixel was visited by a crew of foresters, who took measurements on survey or response variables like DRYBIO. It is important to have a model to accurately predict DRYBIO because it reduces the cost from having foresters visiting each plot of pixel individually. An accurate estimate of DRYBIO can be analyzed over time to study deforestation, ground temperature, habitat loss, carbon sequestration, and other biological processes that involve biomass. Especially given the current state of climate change, it is important to accurately predict biomass for carbon tracking purposes. Some of the variables I will investigate include tcc16 or the Analytical Tree Canopy Cover from 2018 and tmean or the PRISM mean annual temperature - 30yr normals (1991-2020) (degC*100). There are 8572 rows in the dataset and 25 columns. Half of them will be used to train models and the other half for testing. I will compare my final models using the test set RMSE. Since there are many predictors, I will prioritize sparsity and simpler models. I will use random forest, best subset selection, and generalized additive models in my processing. This allows me to explore linear and nonlinear models.
+
+### Explatory Data Analysis
+
+```{r}
+library(car)
+library(randomForest) #import libraries
+library(gam)
+library(splines)
+library(leaps)
+set.seed(1)
+```
+
+```{r}
+data <- read.csv("ProjectData.csv") #load data 
+data <- subset(data, select = -c(BA,VOL.CF	,VOL.BF,COUNT,CARBON))
+test <- data[data$train == 0,]
+train <- data[data$train == 1,]
+
+train <- subset(train, select = -c(train))
+test <- subset(test, select = -c(train))
+
+```
+
+First, I will determine if the response variable, DRYBIO, is associated with indices of vegetation greenness. I will also investigate if these variables are correlated with each other. I start by plotting DRYBIO vs. tcc16 (National Land Cover Dataset (NLCD), Analytical Tree Canopy Cover).
+
+```{r}
+attach(data)
+plot(DRYBIO~tcc16, main = "DRYBIO vs. tcc16")
+```
+
+There seems to be an exponential relationship between tcc16 and DRYBIO. A linear fit could also be appropriate. Next, I plot another indicator of vegetation greenness, ndvi (LANDFIRE 2010 Landsat - (((b4-b3)/(b4+b3))*10000)). 
+
+```{r}
+plot(DRYBIO~ndvi, main = "DRBIO vs. ndvi")
+```
+
+There is a strong exponential relationship between ndvi and DRYBIO. Most of the points have a ndvi 0 or greater. Specifically, the histogram below shows that most points have an ndvi of about 7000 to 9000. The distribution appears left skewed.
+
+```{r}
+hist(ndvi)
+```
+
+I repeat this for evi (LANDFIRE 2010 Landsat - (2.5*((b4-b3)/(b4+6*b3-7.5*b1+1))) * 10000), another metric of vegetation greenness.
+
+```{r}
+plot(DRYBIO~evi, main = "DRBIO vs. evi")
+```
+
+This graph looks similar to the one for ndvi. There is a strong exponential relationship between evi and DRYBIO. Most of the points seems to have a evi 0 or greater. Specifically, the histogram below shows that most points have an evi of ~15000 to 27000. The distribution appears left skewed.
+
+```{r}
+hist(evi)
+```
+
+Because the graph of evi seems similar to that with ndvi, I investigate if there is collinearity between these variables.
+
+```{r}
+plot(ndvi~evi, main = "ndvi vs. evi")
+```
+
+Points with a evi from about 0 to 30000 have a strong linear relationship with ndvi.
+
+```{r}
+cor(ndvi, evi)
+```
+
+These two variables are also highly correlated at r=0.8993487. I will confirm this using VIF below.
+
+```{r}
+lm.fit <- lm(DRYBIO ~ . -SUBSECTION -train, data = data) #omit subsection for simplicity 
+#summary(lm.fit)
+
+options(scipen = 999)  
+vif(lm.fit)
+```
+
+Some variables do have a VIF greater than 5, such as elev, tmean, tmax, tmin, tmin01, vpdmax, tdmean, evi, def, and ndvi. Since this dataset has many variables, we can exclude some.
+
+Since evi and ndvi are both indices of vegetation greenness and have a VIF greater than 5, I am going to choose one. Based on my scatter plot of DRYBIO in terms of these two variables, I choose to include ndvi and exclude evi.
+
+It is not necessary to include elev, tdmean, tmean, tmax, tmin, tmin01, vpdmax since they have multicollinearity. Tmean, tdmean, tmax, tmin, tmin01 are all indices of temperature. I will only use tmean, the PRISM mean annual temperature. I will also keep vpdmax or PRISM max annual vapor pressure deficit since it tends to have lower correlation coefficients, as shown below, and measures different environmental information in vapor pressure. I will also include def (TOPOFIRE mean annual climatic water deficit - 30yr normals (1981-2010)) since it's VIF is only slightly greater than 5, and it does not measure temperature 
+
+```{r include= FALSE} 
+cor(tmean, tmax) 
+cor(tmean, tmin)
+cor(tmean, tmin01)
+cor(tmin01,tmin) 
+cor(tmin01,tmax)  
+cor(tmax, tmin)
+cor(vpdmax, tdmean) 
+cor(elev, tmean)  
+cor(elev, vpdmax ) 
+cor(tmin, tmin)
+cor(tmin, vpdmax)
+cor(tmin01, vpdmax)
+cor(tmin01, tmin)
+cor(elev, tmin)
+cor(elev, tmin01)
+cor(elev, tmax)
+```
+
+**Correlation Coefficients, high values highlighted**
+![](cor.png)
+
+Thus, below is a table summarizing the variables that will be used to fit the models.
+
+```{r}
+variables_used <- data.frame(model.type = c("Random Forest", "BSS", "GAM"), Variables.used = c("All but evi, elev, tmax, tmin, tmin01, tdmean", "All", "tcc16, ndvi, tmean, vpdmax"))
+colnames(variables_used) <- c("Model Type", "Variables")
+variables_used
+```
+
+I start using random forest first, which should address some of the nonlinear patterns. Dropping the variables stated above can be useful for sparsity since I probably will not need all of these variables to predict DRYBIO. RF is also known to be a adequate baseline model. Best subset selection will probably perform worse because it only includes linear models. GAMs may perform better because it has the ability to fit nonlinear models. 
+
+### Regression
+
+#### Random forest
+
+In this random forest model, OOB error was not used to choose the number of predictors to consider for each split. Instead, the default of number of predictors divided by 3 or 4 were used.
+
+```{r}
+bag.data <- randomForest(DRYBIO ~ . -evi -elev -tmax -tmin -tmin01 -tdmean, data = train, importance = TRUE)
+plot(bag.data, mai = "OOB Error vs. Number of Trees")
+```
+
+The plot above shows that 100 trees are sufficient for the RF. 
+
+```{r}
+index <- which(colnames(test) == "DRYBIO")
+yhat.bag <- predict(bag.data, newdata = test[,-index], ntrees= 100)
+plot(yhat.bag, test$DRYBIO, xlab = "Yhat", ylab ="Test DRYBIO", main = "DRYBIO vs. Predictions")
+abline(0,1, col = "red")
+sqrt(mean((yhat.bag - test$DRYBIO)^2))
+```
+
+The RMSE is 28.4828 pounds on the test set.
+
+```{r}
+importance(bag.data)
+#sort(importance(bag.data)[,1])
+```
+
+Based on this result above, tcc16, ndvi, tmean, and vpdmax are important. I am going to fit a GAM on these variables. First, I will examine the plots below to determine the best model for each of these variables.
+
+```{r fig.height=4, fig.width=4}
+plot(DRYBIO~tcc16, main = "DRYBIO vs. tcc16") #linear or exponential fit
+```
+
+```{r fig.height=4, fig.width=4}
+plot(DRYBIO~ndvi, main = "DRYBIO vs. ndvi") #exponential, perhaps cubic
+```
+
+```{r fig.height=4, fig.width=4}
+plot(DRYBIO~tmean, main = "DRYBIO vs. tmean") #downwards parabola -x^2
+```
+
+```{r fig.height=4, fig.width=4}
+plot(DRYBIO~vpdmax, main = "DRYBIO vs. vpdmax")  #downwards parabola -x^2
+```
+
+Based on this output, I will use a 2nd degree nonlinear polynomial for tmean and vpdmax. I will fit a linear trend for tcc16 and a cubic spline for ndvi.
+
+#### GAM
+
+```{r}
+ndvi.model <- smooth.spline(ndvi, DRYBIO, cv = TRUE)  
+ndvi.model$df
+```
+
+I use the cross validation function for smoothing splines to determine my degrees of freedom. In this case, I round down to 16 for the degrees of freedom for ndvi.
+
+```{r}
+gam1 <- gam(DRYBIO ~ tcc16 + bs(ndvi, 16, Boundary.knots = range(data$ndvi)) + poly(tmean,2) + poly(vpdmax,2) , data = train)
+pred2 <- predict(gam1, newdata = test)
+plot(pred2, test$DRYBIO, xlab = "Yhat", ylab ="Test DRYBIO", main = "DRYBIO vs. Predictions")
+abline(0,1, col = "red")
+sqrt(mean((pred2 - test$DRYBIO)^2)) #RMSE instead of MSE to convert from pounds^2 back to pounds
+```
+
+The RMSE on the test set is 29.13439 pounds, comparable to the one from the random forest model of 28.4828. I proceed using best subset selection model.
+
+#### Best subset selection
+
+Since BSS subsets variables and only fits linear trends for each of them, I am not going to exclude any when fitting. I will keep the variables as they are in creating this linear model. I am also going to use BIC as a metric to choose the optimal model size. BIC tends to choose smaller models. Since I care about sparsity and not having too many variables, this metric is appropriate.  
+
+```{r}
+regfit <- regsubsets(DRYBIO ~ ., train, nvmax=39)  
+reg.summary <- summary(regfit)
+```
+
+```{r}
+which.min(reg.summary$bic)
+plot(reg.summary$bic, xlab = "Number of Variables", ylab = "BIC", main = "BIC vs. Model Size",type = "l")
+points(6, reg.summary$bic[6], col = "red", cex = 2, pch = 20)
+```
+
+I am going to use a 6 variable model following BIC. I prefer the simplicity and sparsity. The coefficients for this model are below. 
+
+```{r}
+coef(regfit,6) 
+```
+
+I then calculate the test set RMSE. 
+
+```{r}
+test.mat <- model.matrix(DRYBIO~., data = test)
+```
+
+
+```{r}
+coefi <- coef(regfit,6) #optimal model size
+pred <- test.mat[, names(coefi)] %*% coefi
+sqrt(mean((pred - test$DRYBIO)^2))
+plot(pred, test$DRYBIO, xlab = "Yhat", ylab ="Test DRYBIO", main = "DRYBIO vs. Predictions")
+abline(0,1, col = "red")
+```
+
+The test RMSE for the 6 variable model chosen by best subset selection is 29.30224. Above is a graph of this model's prediction of DRYBIO vs. the test DRYBIO. 
+
+```{r}
+detach(data)
+```
+
+### Conclusions
+```{r}
+intercept.mean <- mean(train$DRYBIO)
+sqrt(mean((intercept.mean - test$DRYBIO)^2))
+```
+
+
+The test set RMSE for a 6 variable, linear model is 29.30 pounds. For the random forest model it is 28.48, while it is 29.13 pounds for the GAM. I am not surprised since random forest averages the results of multiples trees and hides some variables at random for a split, which may be beneficial to reduce any collinearity that I missed. However, it seems like the models do fair job at predicting DRYBIO. They are all off by about 30 pounds of biomass. In contrast, an intercept only model that only predicts the average DRYBIO of the training samples has a RMSE of 39.42655 pounds, as shown in the code above. Hence, the 3 models above perform better. Still, an error of 30 pounds of biomass could have significant influence on carbon sequestration, which can be used to determine carbon neutrality or projected temperature increases. Additionally, it is essential to have an accurate measurement of DRYBIO for habitat conservation efforts that target areas with low biomass/DRYBIO (lbs). Overall, an accurate measure of DRYBIO can be used to better understand the environment and corresponding biological mechanisms like the biomass decomposition rate. 
+
+Moreover, the random forest model uses all but 6 variables, while the GAM model uses 4. Best subset selection yielded a 6 variable model per the optimal BIC. Hence, the simplest model for sparsity is the GAM model. Nevertheless, GAM and random forests are not very interpretable. The 6 variable model from best subset selection is the most interpretable since it is in linear form. Depending on the stakeholders, a more interpretable, linear model may be preferred. For example, for every 90x90 pixel of land included in SUBSECTIONM333Db, there is a 8.273334828 increase in DRYBIO (lbs).
+
+### Appendix
+
+Pair plot to visualize correlations:
+
+```{r fig.width= 7.5, fig.height=7.5}
+plot(data[,c(2:10, 19)], pch = ".") 
+plot(data[,c(10:15, 17:(ncol(data)-1))], pch = ".")
+```
